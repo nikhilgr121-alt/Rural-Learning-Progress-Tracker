@@ -1,0 +1,359 @@
+import React, { useState, useEffect } from 'react';
+import { Users, Plus, Search, MoreVertical, Edit2, Trash2, X, Check, Sparkles, AlertCircle } from 'lucide-react';
+import { api, Student } from '../lib/api';
+import { motion, AnimatePresence } from 'motion/react';
+
+export default function Students() {
+  const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [viewingStudent, setViewingStudent] = useState<Student | null>(null);
+  const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [newStudent, setNewStudent] = useState({ name: '', age: 0, class: '' });
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    loadStudents();
+  }, []);
+
+  async function loadStudents() {
+    setLoading(true);
+    try {
+      const data = await api.getStudents();
+      setStudents(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      if (editingStudent) {
+        await api.updateStudent(editingStudent.id, newStudent);
+        setEditingStudent(null);
+      } else {
+        await api.addStudent(newStudent);
+      }
+      setIsAdding(false);
+      setNewStudent({ name: '', age: 0, class: '' });
+      loadStudents();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (!deletingId) return;
+    try {
+      await api.deleteStudent(deletingId);
+      setDeletingId(null);
+      loadStudents();
+      setActiveMenu(null);
+      setViewingStudent(null);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function startEdit(student: Student) {
+    setEditingStudent(student);
+    setNewStudent({ name: student.name, age: student.age, class: student.class });
+    setIsAdding(true);
+    setActiveMenu(null);
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <input 
+            type="text" 
+            placeholder="Search students..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+          />
+        </div>
+        <button 
+          onClick={() => setIsAdding(true)}
+          className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all active:scale-95 text-sm"
+        >
+          <Plus size={18} />
+          Add Student
+        </button>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Student Name</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Age</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Learning Group</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {loading ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-10 text-center text-slate-400 text-sm italic">Loading student database...</td>
+              </tr>
+            ) : students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.class.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-10 text-center text-slate-400 text-sm">No student records found.</td>
+              </tr>
+            ) : (
+              students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.class.toLowerCase().includes(searchQuery.toLowerCase())).map(s => (
+                <tr key={s.id} className="hover:bg-slate-50 transition-colors group">
+                  <td className="px-6 py-4">
+                    <button 
+                      onClick={() => setViewingStudent(s)}
+                      className="flex items-center gap-3 text-left group/profile"
+                    >
+                      <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600 font-bold shrink-0 text-sm group-hover/profile:bg-blue-600 group-hover/profile:text-white transition-all shadow-sm">
+                        {s.name[0]}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-800 text-sm group-hover/profile:text-blue-600 transition-colors">{s.name}</span>
+                        <p className="text-[10px] text-slate-400 font-medium">ID: {s.id.substring(0, 8)}</p>
+                      </div>
+                    </button>
+                  </td>
+                  <td className="px-6 py-4 text-slate-600 text-sm">{s.age} yrs</td>
+                  <td className="px-6 py-4">
+                    <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                      {s.class}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="relative inline-block text-left">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === s.id ? null : s.id); }}
+                        className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all"
+                      >
+                        <MoreVertical size={16} />
+                      </button>
+
+                      <AnimatePresence>
+                        {activeMenu === s.id && (
+                          <>
+                            <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setActiveMenu(null); }} />
+                            <motion.div 
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              className="absolute right-0 top-10 z-20 w-44 bg-white border border-slate-200 shadow-2xl rounded-2xl py-2 flex flex-col overflow-hidden"
+                            >
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setViewingStudent(s); setActiveMenu(null); }}
+                                className="flex items-center gap-3 px-4 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors text-left"
+                              >
+                                <Users size={16} className="text-blue-500" />
+                                View Profile
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); startEdit(s); setActiveMenu(null); }}
+                                className="flex items-center gap-3 px-4 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors text-left"
+                              >
+                                <Edit2 size={16} className="text-indigo-500" />
+                                Edit Record
+                              </button>
+                              <div className="h-px bg-slate-100" />
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setDeletingId(s.id); setActiveMenu(null); }}
+                                className="flex items-center gap-3 px-4 py-3 text-sm text-rose-500 hover:bg-rose-50 transition-colors text-left"
+                              >
+                                <Trash2 size={16} />
+                                Delete
+                              </button>
+                            </motion.div>
+                          </>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <AnimatePresence>
+        {isAdding && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsAdding(false)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white w-full max-w-md p-8 rounded-3xl shadow-2xl overflow-hidden">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-xl font-display font-bold text-slate-800">
+                  {editingStudent ? 'Edit Student Record' : 'New Student Record'}
+                </h3>
+                <button onClick={() => { setIsAdding(false); setEditingStudent(null); }} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-all"><X size={20} /></button>
+              </div>
+
+              <form onSubmit={handleAdd} className="space-y-6">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Full Name</label>
+                  <input 
+                    type="text" required
+                    value={newStudent.name}
+                    onChange={e => setNewStudent({...newStudent, name: e.target.value})}
+                    placeholder="Enter student's full name"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Age</label>
+                    <input 
+                      type="number" required
+                      value={newStudent.age || ''}
+                      onChange={e => setNewStudent({...newStudent, age: parseInt(e.target.value)})}
+                      placeholder="e.g. 10"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Grade</label>
+                    <input 
+                      type="text" required
+                      value={newStudent.class}
+                      onChange={e => setNewStudent({...newStudent, class: e.target.value})}
+                      placeholder="e.g. Grade 4"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button type="button" onClick={() => { setIsAdding(false); setEditingStudent(null); }} className="flex-1 px-4 py-3 border border-slate-200 rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition-all text-sm uppercase tracking-widest">Cancel</button>
+                  <button type="submit" className="flex-2 px-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all text-sm uppercase tracking-widest">
+                    {editingStudent ? 'Update Record' : 'Create Record'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Profile Detail View */}
+      <AnimatePresence>
+        {viewingStudent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setViewingStudent(null)} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              exit={{ scale: 0.9, opacity: 0 }} 
+              className="relative bg-white w-full max-w-2xl rounded-[32px] shadow-2xl overflow-hidden flex flex-col md:flex-row"
+            >
+              <div className="w-full md:w-1/3 bg-slate-900 p-8 flex flex-col items-center justify-center text-center">
+                 <div className="w-24 h-24 bg-blue-600 rounded-3xl flex items-center justify-center text-white text-4xl font-bold shadow-2xl shadow-blue-600/40 mb-6 uppercase">
+                    {viewingStudent.name[0]}
+                 </div>
+                 <h3 className="text-xl font-display font-bold text-white mb-1">{viewingStudent.name}</h3>
+                 <p className="text-blue-400 font-bold uppercase tracking-widest text-[10px]">{viewingStudent.class}</p>
+                 
+                 <div className="mt-8 space-y-4 w-full">
+                    <button 
+                      onClick={() => startEdit(viewingStudent)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-all text-xs font-bold uppercase tracking-widest"
+                    >
+                      <Edit2 size={14} />
+                      Edit Profile
+                    </button>
+                    <button 
+                      onClick={() => setDeletingId(viewingStudent.id)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white transition-all text-xs font-bold uppercase tracking-widest"
+                    >
+                      <Trash2 size={14} />
+                      Delete Student
+                    </button>
+                 </div>
+              </div>
+
+              <div className="flex-1 p-8">
+                <div className="flex items-center justify-between mb-8">
+                  <h4 className="text-lg font-display font-bold text-slate-800">Student Overview</h4>
+                  <button onClick={() => setViewingStudent(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-all"><X size={20} /></button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6 mb-8">
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Age</p>
+                    <p className="text-xl font-bold text-slate-800">{viewingStudent.age} Years</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Enrollment Date</p>
+                    <p className="text-sm font-bold text-slate-800">{new Date(parseInt(viewingStudent.id)).toLocaleDateString()}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Deep Metrics</h5>
+                  <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-emerald-600 uppercase font-bold tracking-wider">Attendance Rate</p>
+                      <p className="text-lg font-bold text-emerald-700">94.2%</p>
+                    </div>
+                    <Check className="text-emerald-500" />
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-blue-600 uppercase font-bold tracking-wider">Cognitive Progress</p>
+                      <p className="text-lg font-bold text-blue-700">Exceptional</p>
+                    </div>
+                    <Sparkles className="text-blue-500 w-5 h-5" />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* Deletion Confirmation Modal */}
+      <AnimatePresence>
+        {deletingId && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDeletingId(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              exit={{ scale: 0.95, opacity: 0 }} 
+              className="relative bg-white w-full max-w-sm p-8 rounded-[32px] shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <AlertCircle size={32} />
+              </div>
+              <h3 className="text-xl font-display font-bold text-slate-800 mb-2">Delete Student?</h3>
+              <p className="text-slate-500 text-sm mb-8">This action is permanent and will delete all associated progress records.</p>
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setDeletingId(null)} 
+                  className="flex-1 py-3 px-4 border border-slate-200 rounded-xl text-slate-500 font-bold uppercase tracking-widest text-[10px] hover:bg-slate-50 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleDelete} 
+                  className="flex-1 py-3 px-4 bg-rose-500 text-white rounded-xl font-bold uppercase tracking-widest text-[10px] shadow-lg shadow-rose-500/20 hover:bg-rose-600 transition-all"
+                >
+                  Confirm Delete
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
