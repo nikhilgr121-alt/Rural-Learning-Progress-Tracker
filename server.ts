@@ -8,16 +8,39 @@ const PORT = 3000;
 const DATA_FILE = path.join(process.cwd(), "db.json");
 
 // Ensure mock DB exists
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify({
-    students: [],
-    progress: [],
-    subjects: ["Math", "English", "Science", "Social Studies"],
-    attendance: [],
+const seedDB = () => {
+  const db = {
+    students: [
+      { id: "1714670000000", name: "Amit Kumar", age: 10, class: "Grade 4" },
+      { id: "1714670000001", name: "Priya Singh", age: 9, class: "Grade 3" },
+      { id: "1714670000002", name: "Rahul Sharma", age: 11, class: "Grade 5" },
+      { id: "1714670000003", name: "Sita Devi", age: 8, class: "Grade 2" },
+      { id: "1714670000004", name: "Vikram Mehra", age: 12, class: "Grade 6" }
+    ],
+    progress: [
+      { id: "1", studentId: "1714670000000", subject: "Math", score: 85, lesson: "Basic Addition", status: "Completed", date: "2024-04-20" },
+      { id: "2", studentId: "1714670000000", subject: "English", score: 78, lesson: "Grammar Basics", status: "Completed", date: "2024-04-22" },
+      { id: "3", studentId: "1714670000001", subject: "Science", score: 92, lesson: "Water Cycle", status: "Completed", date: "2024-04-21" },
+      { id: "4", studentId: "1714670000002", subject: "Math", score: 65, lesson: "Fractions", status: "Completed", date: "2024-04-23" },
+      { id: "5", studentId: "1714670000003", subject: "English", score: 88, lesson: "Alphabet Mastery", status: "Completed", date: "2024-04-24" }
+    ],
+    subjects: ["Math", "English", "Science", "Social Studies", "Art", "Physical Education"],
+    attendance: [
+      { id: "a1", studentId: "1714670000000", date: "2024-04-25", status: "Present" },
+      { id: "a2", studentId: "1714670000001", date: "2024-04-25", status: "Present" },
+      { id: "a3", studentId: "1714670000002", date: "2024-04-25", status: "Absent" },
+      { id: "a4", studentId: "1714670000003", date: "2024-04-25", status: "Present" },
+      { id: "a5", studentId: "1714670000004", date: "2024-04-25", status: "Late" }
+    ],
     users: [
-      { email: "teacher@rural.edu", password: "password", name: "Teacher User" }
+      { email: "teacher@rural.edu", password: "password", name: "Regional Educator" }
     ]
-  }, null, 2));
+  };
+  fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
+};
+
+if (!fs.existsSync(DATA_FILE)) {
+  seedDB();
 }
 
 app.use(express.json());
@@ -185,6 +208,18 @@ app.post("/api/attendance", (req, res) => {
   
   writeDB(db);
   res.json({ success: true });
+});
+
+app.post("/api/students/bulk", (req, res) => {
+  const db = readDB();
+  const students = req.body; // Array of { name, age, class }
+  const newStudents = students.map((s: any, idx: number) => ({
+    id: (Date.now() + idx).toString(),
+    ...s
+  }));
+  db.students.push(...newStudents);
+  writeDB(db);
+  res.status(201).json(newStudents);
 });
 
 async function startServer() {

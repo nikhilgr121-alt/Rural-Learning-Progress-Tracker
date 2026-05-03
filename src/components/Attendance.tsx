@@ -46,10 +46,10 @@ export default function Attendance() {
     setSaving(true);
     setMessage(null);
     try {
-      const records = Object.entries(attendance).map(([studentId, status]) => ({
+      const records: Omit<AttendanceType, 'id'>[] = Object.entries(attendance).map(([studentId, status]) => ({
         studentId,
         date,
-        status
+        status: status as 'Present' | 'Absent' | 'Late'
       }));
       await api.saveAttendance(records);
       setMessage({ type: 'success', text: 'Attendance saved successfully!' });

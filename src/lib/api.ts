@@ -45,6 +45,14 @@ export const api = {
     });
     return res.json();
   },
+  bulkAddStudents: async (students: Omit<Student, 'id'>[]): Promise<Student[]> => {
+    const res = await fetch('/api/students/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(students),
+    });
+    return res.json();
+  },
   updateStudent: async (id: string, student: Partial<Student>): Promise<Student> => {
     const res = await fetch(`/api/students/${id}`, {
       method: 'PUT',

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Search, MoreVertical, Edit2, Trash2, X, Check, Sparkles, AlertCircle } from 'lucide-react';
+import { Users, Plus, Search, MoreVertical, Edit2, Trash2, X, Check, Sparkles, AlertCircle, QrCode, Share2 } from 'lucide-react';
 import { api, Student } from '../lib/api';
 import { motion, AnimatePresence } from 'motion/react';
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function Students() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -10,11 +11,24 @@ export default function Students() {
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
   const [viewingStudent, setViewingStudent] = useState<Student | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [showQR, setShowQR] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importData, setImportData] = useState('');
   const [newStudent, setNewStudent] = useState({ name: '', age: 0, class: '' });
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadStudents();
+    
+    // Check for student ID in URL
+    const params = new URLSearchParams(window.location.search);
+    const studentId = params.get('id');
+    if (studentId) {
+      api.getStudents().then(data => {
+        const student = data.find(s => s.id === studentId);
+        if (student) setViewingStudent(student);
+      });
+    }
   }, []);
 
   async function loadStudents() {
@@ -68,9 +82,22 @@ export default function Students() {
     setActiveMenu(null);
   }
 
+  const handleBulkImport = async () => {
+    try {
+      const parsed = JSON.parse(importData);
+      if (!Array.isArray(parsed)) throw new Error('Must be an array of students');
+      await api.bulkAddStudents(parsed);
+      setShowImport(false);
+      setImportData('');
+      loadStudents();
+    } catch (err) {
+      alert('Invalid JSON format. Please ensure it is an array of student objects with name, age, and class.');
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
           <input 
@@ -81,13 +108,21 @@ export default function Students() {
             className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
           />
         </div>
-        <button 
-          onClick={() => setIsAdding(true)}
-          className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all active:scale-95 text-sm"
-        >
-          <Plus size={18} />
-          Add Student
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 bg-white text-slate-600 border border-slate-200 px-5 py-2.5 rounded-xl font-bold hover:bg-slate-50 transition-all text-[10px] uppercase tracking-widest shadow-sm"
+          >
+            Import Data
+          </button>
+          <button 
+            onClick={() => setIsAdding(true)}
+            className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all active:scale-95 text-sm"
+          >
+            <Plus size={18} />
+            Add Student
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -157,6 +192,13 @@ export default function Students() {
                               >
                                 <Users size={16} className="text-blue-500" />
                                 View Profile
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setViewingStudent(s); setShowQR(true); setActiveMenu(null); }}
+                                className="flex items-center gap-3 px-4 py-3 text-sm text-slate-600 hover:bg-slate-50 transition-colors text-left"
+                              >
+                                <QrCode size={16} className="text-emerald-500" />
+                                Share QR Code
                               </button>
                               <button 
                                 onClick={(e) => { e.stopPropagation(); startEdit(s); setActiveMenu(null); }}
@@ -264,6 +306,13 @@ export default function Students() {
                  
                  <div className="mt-8 space-y-4 w-full">
                     <button 
+                      onClick={() => setShowQR(true)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all text-xs font-bold uppercase tracking-widest border border-emerald-500/20"
+                    >
+                      <QrCode size={14} />
+                      Share Profile
+                    </button>
+                    <button 
                       onClick={() => startEdit(viewingStudent)}
                       className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-all text-xs font-bold uppercase tracking-widest"
                     >
@@ -319,6 +368,112 @@ export default function Students() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* QR Code Modal */}
+      <AnimatePresence>
+        {showQR && viewingStudent && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowQR(false)} className="absolute inset-0 bg-slate-900/70 backdrop-blur-md" />
+            <motion.div 
+              initial={{ scale: 0.9, y: 20, opacity: 0 }} 
+              animate={{ scale: 1, y: 0, opacity: 1 }} 
+              exit={{ scale: 0.9, y: 20, opacity: 0 }} 
+              className="relative bg-white w-full max-w-sm rounded-[40px] shadow-2xl p-10 text-center overflow-hidden"
+            >
+              {/* Decorative background */}
+              <div className="absolute top-0 left-0 w-full h-32 bg-emerald-600 -translate-y-16 skew-y-6" />
+              
+              <div className="relative z-10">
+                <div className="w-20 h-20 bg-white rounded-3xl shadow-xl mx-auto flex items-center justify-center mb-6">
+                   <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 font-bold text-2xl uppercase">
+                     {viewingStudent.name[0]}
+                   </div>
+                </div>
+                
+                <h3 className="text-2xl font-display font-bold text-slate-800 mb-1">{viewingStudent.name}</h3>
+                <p className="text-emerald-600 font-bold uppercase tracking-widest text-[10px] mb-8">{viewingStudent.class} • Profile Card</p>
+
+                <div className="bg-slate-50 p-8 rounded-[32px] border border-slate-100 mb-8 flex flex-col items-center shadow-inner">
+                  <QRCodeSVG 
+                    value={`${window.location.origin}/students?id=${viewingStudent.id}`} 
+                    size={160}
+                    level="H"
+                    includeMargin={false}
+                    className="p-2 bg-white rounded-xl shadow-lg border border-slate-200"
+                  />
+                  <p className="mt-6 text-[10px] text-slate-400 font-bold uppercase tracking-widest">Scan to view digital records</p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setShowQR(false)} 
+                    className="flex-1 py-4 border border-slate-200 rounded-2xl font-bold text-slate-500 hover:bg-slate-50 transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                  >
+                    Close
+                  </button>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/students?id=${viewingStudent.id}`);
+                      alert('Profile link copied to clipboard!');
+                    }}
+                    className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                  >
+                    <Share2 size={14} />
+                    Copy Link
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Import Modal */}
+      <AnimatePresence>
+        {showImport && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowImport(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+            <motion.div 
+              initial={{ scale: 0.9, y: 20, opacity: 0 }} 
+              animate={{ scale: 1, y: 0, opacity: 1 }} 
+              exit={{ scale: 0.9, y: 20, opacity: 0 }} 
+              className="relative bg-white w-full max-w-lg rounded-[40px] shadow-2xl p-8 overflow-hidden"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-display font-bold text-slate-800">Bulk Import Students</h3>
+                <button onClick={() => setShowImport(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={20} /></button>
+              </div>
+              
+              <div className="space-y-4">
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Paste a JSON array of student objects. Each object should have <b>name</b>, <b>age</b>, and <b>class</b>.
+                </p>
+                <textarea 
+                  value={importData}
+                  onChange={(e) => setImportData(e.target.value)}
+                  placeholder='[{"name": "Student Name", "age": 10, "class": "Grade 4"}]'
+                  className="w-full h-48 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-xs font-mono"
+                />
+                <div className="flex gap-3 pt-2">
+                  <button 
+                    onClick={() => setImportData('[{"name": "Arun K", "age": 10, "class": "Grade 4"}, {"name": "Meena S", "age": 9, "class": "Grade 3"}]')}
+                    className="text-[10px] font-bold text-blue-600 uppercase tracking-widest hover:underline"
+                  >
+                    Load Sample
+                  </button>
+                </div>
+                <button 
+                  onClick={handleBulkImport}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all text-xs uppercase tracking-widest mt-4"
+                >
+                  Process Import
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Deletion Confirmation Modal */}
       <AnimatePresence>
         {deletingId && (
