@@ -11,11 +11,11 @@ const DATA_FILE = path.join(process.cwd(), "db.json");
 const seedDB = () => {
   const db = {
     students: [
-      { id: "1714670000000", name: "Amit Kumar", age: 10, class: "Grade 4" },
-      { id: "1714670000001", name: "Priya Singh", age: 9, class: "Grade 3" },
-      { id: "1714670000002", name: "Rahul Sharma", age: 11, class: "Grade 5" },
-      { id: "1714670000003", name: "Sita Devi", age: 8, class: "Grade 2" },
-      { id: "1714670000004", name: "Vikram Mehra", age: 12, class: "Grade 6" }
+      { id: "1714670000000", name: "Amit Kumar", age: 10, class: "Grade 4", village: "Kampur" },
+      { id: "1714670000001", name: "Priya Singh", age: 9, class: "Grade 3", village: "Sohanpur" },
+      { id: "1714670000002", name: "Rahul Sharma", age: 11, class: "Grade 5", village: "Kampur" },
+      { id: "1714670000003", name: "Sita Devi", age: 8, class: "Grade 2", village: "Bishnupur" },
+      { id: "1714670000004", name: "Vikram Mehra", age: 12, class: "Grade 6", village: "Sohanpur" }
     ],
     progress: [
       { id: "1", studentId: "1714670000000", subject: "Math", score: 85, lesson: "Basic Addition", status: "Completed", date: "2024-04-20" },

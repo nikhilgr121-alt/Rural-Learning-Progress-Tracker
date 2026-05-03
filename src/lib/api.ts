@@ -3,6 +3,7 @@ export interface Student {
   name: string;
   age: number;
   class: string;
+  village: string;
 }
 
 export interface Progress {

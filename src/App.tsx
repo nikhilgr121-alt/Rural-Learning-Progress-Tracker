@@ -7,6 +7,8 @@ import {
   LayoutDashboard, 
   GraduationCap, 
   Calendar,
+  Map,
+  BarChart3,
   LogOut
 } from 'lucide-react';
 import { api } from './lib/api';
@@ -14,6 +16,8 @@ import Dashboard from './components/Dashboard';
 import Students from './components/Students';
 import ProgressTracker from './components/ProgressTracker';
 import Attendance from './components/Attendance';
+import Villages from './components/Villages';
+import RegionalAnalysis from './components/RegionalAnalysis';
 import Auth from './components/Auth';
 import EduBot from './components/EduBot';
 
@@ -51,8 +55,10 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/students" element={<Students />} />
+          <Route path="/villages" element={<Villages />} />
           <Route path="/progress" element={<ProgressTracker />} />
           <Route path="/attendance" element={<Attendance />} />
+          <Route path="/analysis" element={<RegionalAnalysis />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
@@ -67,8 +73,10 @@ function Layout({ children, user, onLogout }: { children: React.ReactNode, user:
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Students', path: '/students', icon: Users },
+    { name: 'Villages', path: '/villages', icon: Map },
     { name: 'Curriculum', path: '/progress', icon: BookOpen },
     { name: 'Attendance', path: '/attendance', icon: Calendar },
+    { name: 'Analysis', path: '/analysis', icon: BarChart3 },
   ];
 
   return (

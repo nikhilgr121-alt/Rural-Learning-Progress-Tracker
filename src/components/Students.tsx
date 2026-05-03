@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Search, MoreVertical, Edit2, Trash2, X, Check, Sparkles, AlertCircle, QrCode, Share2 } from 'lucide-react';
+import { Users, Plus, Search, MoreVertical, Edit2, Trash2, X, Check, Sparkles, AlertCircle, QrCode, Share2, MapPin } from 'lucide-react';
 import { api, Student } from '../lib/api';
+import { analyzeStudentPerformance, predictPerformance } from '../services/geminiService';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 
 export default function Students() {
   const [students, setStudents] = useState<Student[]>([]);
+  const [allProgress, setAllProgress] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
@@ -14,8 +16,12 @@ export default function Students() {
   const [showQR, setShowQR] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importData, setImportData] = useState('');
-  const [newStudent, setNewStudent] = useState({ name: '', age: 0, class: '' });
+  const [aiReport, setAiReport] = useState<string | null>(null);
+  const [generatingAi, setGeneratingAi] = useState(false);
+  const [prediction, setPrediction] = useState<"Excellent" | "Average" | "Weak" | null>(null);
+  const [newStudent, setNewStudent] = useState({ name: '', age: 10, class: '', village: '' });
   const [searchQuery, setSearchQuery] = useState('');
+  const [villageFilter, setVillageFilter] = useState<string>('All Villages');
 
   useEffect(() => {
     loadStudents();
@@ -34,8 +40,12 @@ export default function Students() {
   async function loadStudents() {
     setLoading(true);
     try {
-      const data = await api.getStudents();
-      setStudents(data);
+      const [studentData, progressData] = await Promise.all([
+        api.getStudents(),
+        api.getProgress()
+      ]);
+      setStudents(studentData);
+      setAllProgress(progressData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -53,7 +63,7 @@ export default function Students() {
         await api.addStudent(newStudent);
       }
       setIsAdding(false);
-      setNewStudent({ name: '', age: 0, class: '' });
+      setNewStudent({ name: '', age: 10, class: '', village: '' });
       loadStudents();
     } catch (err) {
       console.error(err);
@@ -77,7 +87,7 @@ export default function Students() {
 
   function startEdit(student: Student) {
     setEditingStudent(student);
-    setNewStudent({ name: student.name, age: student.age, class: student.class });
+    setNewStudent({ name: student.name, age: student.age, class: student.class, village: student.village });
     setIsAdding(true);
     setActiveMenu(null);
   }
@@ -95,18 +105,65 @@ export default function Students() {
     }
   };
 
+  const generateAiInsights = async () => {
+    if (!viewingStudent) return;
+    setGeneratingAi(true);
+    setAiReport(null);
+    setPrediction(null);
+    try {
+      const [progress, attendance] = await Promise.all([
+        api.getProgress(),
+        api.getAttendance()
+      ]);
+      
+      const sProgress = progress.filter(p => p.studentId === viewingStudent.id);
+      const sAttendance = attendance.filter(a => a.studentId === viewingStudent.id);
+      
+      const [analysis, pred] = await Promise.all([
+        analyzeStudentPerformance(viewingStudent, sProgress, sAttendance),
+        predictPerformance(viewingStudent, sProgress, sAttendance)
+      ]);
+      
+      setAiReport(analysis);
+      setPrediction(pred);
+    } catch (err) {
+      console.error(err);
+      setAiReport("Failed to generate AI report. Please check your connection or API configuration.");
+    } finally {
+      setGeneratingAi(false);
+    }
+  };
+
+  const filteredStudents = students.filter(s => {
+    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || (s.class && s.class.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesVillage = villageFilter === 'All Villages' || s.village === villageFilter;
+    return matchesSearch && matchesVillage;
+  });
+
+  const villages = Array.from(new Set(students.map(s => s.village).filter(Boolean))).sort();
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-          <input 
-            type="text" 
-            placeholder="Search students..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
-          />
+        <div className="flex flex-1 gap-3 max-w-2xl">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <input 
+              type="text" 
+              placeholder="Search students..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm shadow-sm"
+            />
+          </div>
+          <select 
+            value={villageFilter}
+            onChange={(e) => setVillageFilter(e.target.value)}
+            className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-xs font-bold text-slate-600 shadow-sm"
+          >
+            <option>All Villages</option>
+            {villages.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
         </div>
         <div className="flex items-center gap-3">
           <button 
@@ -116,7 +173,7 @@ export default function Students() {
             Import Data
           </button>
           <button 
-            onClick={() => setIsAdding(true)}
+            onClick={() => { setIsAdding(true); setEditingStudent(null); setNewStudent({ name: '', age: 10, class: '', village: '' }); }}
             className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl font-semibold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all active:scale-95 text-sm"
           >
             <Plus size={18} />
@@ -130,6 +187,8 @@ export default function Students() {
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
               <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Student Name</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Village</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Avg Marks</th>
               <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Age</th>
               <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Learning Group</th>
               <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider text-right">Action</th>
@@ -138,14 +197,14 @@ export default function Students() {
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <tr>
-                <td colSpan={4} className="px-6 py-10 text-center text-slate-400 text-sm italic">Loading student database...</td>
+                <td colSpan={6} className="px-6 py-10 text-center text-slate-400 text-sm italic">Loading student database...</td>
               </tr>
-            ) : students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.class.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+            ) : filteredStudents.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-10 text-center text-slate-400 text-sm">No student records found.</td>
+                <td colSpan={6} className="px-6 py-10 text-center text-slate-400 text-sm">No student records found.</td>
               </tr>
             ) : (
-              students.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.class.toLowerCase().includes(searchQuery.toLowerCase())).map(s => (
+              filteredStudents.map(s => (
                 <tr key={s.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-6 py-4">
                     <button 
@@ -160,6 +219,26 @@ export default function Students() {
                         <p className="text-[10px] text-slate-400 font-medium">ID: {s.id.substring(0, 8)}</p>
                       </div>
                     </button>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-1.5 text-slate-600">
+                      <MapPin size={12} className="text-slate-400" />
+                      <span className="text-[11px] font-semibold">{s.village || 'Not Set'}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {(() => {
+                      const scores = allProgress.filter(p => p.studentId === s.id && p.score > 0).map(p => p.score);
+                      const avg = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+                      return avg !== null ? (
+                        <div className="flex items-center gap-1.5">
+                          <div className={`w-1.5 h-1.5 rounded-full ${avg > 80 ? 'bg-emerald-500' : avg > 50 ? 'bg-amber-500' : 'bg-rose-500'}`} />
+                          <span className="font-bold text-slate-700 text-sm">{avg}%</span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 italic">No Marks</span>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-4 text-slate-600 text-sm">{s.age} yrs</td>
                   <td className="px-6 py-4">
@@ -274,6 +353,32 @@ export default function Students() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Village Name</label>
+                    <input 
+                      type="text" required
+                      list="village-list"
+                      value={newStudent.village}
+                      onChange={e => setNewStudent({...newStudent, village: e.target.value})}
+                      placeholder="e.g. Kampur"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm font-bold"
+                    />
+                    <datalist id="village-list">
+                      {Array.from(new Set(students.map(s => s.village).filter(Boolean))).map(v => (
+                        <option key={v} value={v} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-slate-500 mb-2 tracking-widest">Academic Year</label>
+                    <select className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm font-bold">
+                      <option>2024-25</option>
+                      <option>2023-24</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="pt-4 flex gap-3">
                   <button type="button" onClick={() => { setIsAdding(false); setEditingStudent(null); }} className="flex-1 px-4 py-3 border border-slate-200 rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition-all text-sm uppercase tracking-widest">Cancel</button>
                   <button type="submit" className="flex-2 px-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all text-sm uppercase tracking-widest">
@@ -335,32 +440,99 @@ export default function Students() {
                   <button onClick={() => setViewingStudent(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-all"><X size={20} /></button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6 mb-8">
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Age</p>
-                    <p className="text-xl font-bold text-slate-800">{viewingStudent.age} Years</p>
+                  <div className="grid grid-cols-2 gap-6 mb-8">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Village</p>
+                        <p className="text-sm font-bold text-slate-800">{viewingStudent.village || 'N/A'}</p>
+                      </div>
+                      <button 
+                        onClick={() => window.location.href = '/villages'}
+                        className="mt-2 text-[8px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md uppercase tracking-wider hover:bg-blue-100 transition-all border border-blue-100 w-fit"
+                      >
+                        View Village Hub
+                      </button>
+                    </div>
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                      <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Avg Score</p>
+                      {(() => {
+                        const scores = allProgress.filter(p => p.studentId === viewingStudent.id && p.score > 0).map(p => p.score);
+                        const avg = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+                        return (
+                          <div className="flex items-end gap-1">
+                            <p className="text-xl font-bold text-slate-800">{avg !== null ? `${avg}%` : 'N/A'}</p>
+                            {avg !== null && <span className={`text-[8px] font-black uppercase mb-1 ${avg > 80 ? 'text-emerald-500' : avg > 50 ? 'text-amber-500' : 'text-rose-500'}`}>
+                              {avg > 80 ? 'Excelling' : avg > 50 ? 'Steady' : 'Focus Needed'}
+                            </span>}
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">Enrollment Date</p>
-                    <p className="text-sm font-bold text-slate-800">{new Date(parseInt(viewingStudent.id)).toLocaleDateString()}</p>
-                  </div>
-                </div>
 
                 <div className="space-y-4">
-                  <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Deep Metrics</h5>
+                  <div className="flex items-center justify-between px-1">
+                    <h5 className="text-xs font-bold text-slate-400 uppercase tracking-widest">AI Performance Advisor</h5>
+                    {!aiReport && !generatingAi && (
+                      <button 
+                        onClick={generateAiInsights}
+                        className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-widest flex items-center gap-1"
+                      >
+                        <Sparkles size={12} /> Generate
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="p-1 bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-2xl border border-slate-100 min-h-[120px] flex flex-col items-center justify-center text-center">
+                    {generatingAi ? (
+                      <div className="w-full space-y-2 p-4">
+                        <div className="h-2 w-3/4 bg-blue-100 rounded animate-pulse mx-auto" />
+                        <div className="h-2 w-full bg-blue-100 rounded animate-pulse mx-auto" />
+                        <div className="h-2 w-5/6 bg-blue-100 rounded animate-pulse mx-auto" />
+                      </div>
+                    ) : aiReport ? (
+                      <div className="p-4 space-y-3 text-left">
+                        {prediction && (
+                          <div className="flex items-center justify-between mb-2">
+                             <div className="flex items-center gap-2">
+                               <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">AI Classification:</span>
+                               <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter ${
+                                 prediction === 'Excellent' ? 'bg-emerald-100 text-emerald-700' :
+                                 prediction === 'Average' ? 'bg-amber-100 text-amber-700' :
+                                 'bg-rose-100 text-rose-700'
+                               }`}>
+                                 {prediction}
+                               </span>
+                             </div>
+                             {prediction === 'Weak' && (
+                               <div className="flex gap-1 animate-pulse">
+                                 <AlertCircle size={12} className="text-rose-500" />
+                                 <span className="text-[8px] font-bold text-rose-500 uppercase tracking-tighter">At Risk</span>
+                               </div>
+                             )}
+                          </div>
+                        )}
+                        {aiReport.split('\n').filter(line => line.trim()).slice(0, 4).map((line, i) => (
+                           <div key={i} className="flex gap-2 text-[11px] text-slate-600 leading-relaxed font-bold">
+                              <span className="text-blue-500 font-bold shrink-0">→</span>
+                              <span>{line.replace(/^[*-]\s*/, '').replace(/^\d+\.\s*/, '')}</span>
+                           </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center p-6 mx-auto">
+                        <Sparkles size={24} className="text-blue-200 mx-auto mb-2" />
+                        <p className="text-[10px] text-slate-400 font-medium italic">Compare marks & attendance history with AI</p>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between">
                     <div>
                       <p className="text-[10px] text-emerald-600 uppercase font-bold tracking-wider">Attendance Rate</p>
                       <p className="text-lg font-bold text-emerald-700">94.2%</p>
                     </div>
                     <Check className="text-emerald-500" />
-                  </div>
-                  <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] text-blue-600 uppercase font-bold tracking-wider">Cognitive Progress</p>
-                      <p className="text-lg font-bold text-blue-700">Exceptional</p>
-                    </div>
-                    <Sparkles className="text-blue-500 w-5 h-5" />
                   </div>
                 </div>
               </div>
@@ -380,7 +552,6 @@ export default function Students() {
               exit={{ scale: 0.9, y: 20, opacity: 0 }} 
               className="relative bg-white w-full max-w-sm rounded-[40px] shadow-2xl p-10 text-center overflow-hidden"
             >
-              {/* Decorative background */}
               <div className="absolute top-0 left-0 w-full h-32 bg-emerald-600 -translate-y-16 skew-y-6" />
               
               <div className="relative z-10">
@@ -395,7 +566,7 @@ export default function Students() {
 
                 <div className="bg-slate-50 p-8 rounded-[32px] border border-slate-100 mb-8 flex flex-col items-center shadow-inner">
                   <QRCodeSVG 
-                    value={`${window.location.origin}/students?id=${viewingStudent.id}`} 
+                    value={window.location.origin + "/students?id=" + viewingStudent.id} 
                     size={160}
                     level="H"
                     includeMargin={false}
@@ -413,7 +584,8 @@ export default function Students() {
                   </button>
                   <button 
                     onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/students?id=${viewingStudent.id}`);
+                      const url = window.location.origin + "/students?id=" + viewingStudent.id;
+                      navigator.clipboard.writeText(url);
                       alert('Profile link copied to clipboard!');
                     }}
                     className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2"
@@ -451,12 +623,12 @@ export default function Students() {
                 <textarea 
                   value={importData}
                   onChange={(e) => setImportData(e.target.value)}
-                  placeholder='[{"name": "Student Name", "age": 10, "class": "Grade 4"}]'
+                  placeholder='[{"name": "Student Name", "age": 10, "class": "Grade 4", "village": "Village Name"}]'
                   className="w-full h-48 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-xs font-mono"
                 />
                 <div className="flex gap-3 pt-2">
                   <button 
-                    onClick={() => setImportData('[{"name": "Arun K", "age": 10, "class": "Grade 4"}, {"name": "Meena S", "age": 9, "class": "Grade 3"}]')}
+                    onClick={() => setImportData('[{"name": "Arun K", "age": 10, "class": "Grade 4", "village": "Kampur"}, {"name": "Meena S", "age": 9, "class": "Grade 3", "village": "Sohanpur"}]')}
                     className="text-[10px] font-bold text-blue-600 uppercase tracking-widest hover:underline"
                   >
                     Load Sample
